@@ -425,24 +425,17 @@ body {
 
   <!-- Image Tab -->
   <div id="logTabImage" style="display:none">
-    <div class="upload-zone" onclick="document.getElementById('imageInput').click()">
+    <div class="upload-zone" onclick="document.getElementById('cameraInput').click()">
       <div class="icon">📷</div>
-      <div class="hint">点击拍照或选择图片</div>
+      <div class="hint">点击拍照</div>
     </div>
-    <input type="file" id="imageInput" accept="image/*" capture="environment" style="display:none" onchange="onImageSelected(event)">
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none" onchange="onImageSelected(event)">
+    <div style="text-align:center;margin:12px 0;color:var(--text2);font-size:13px">— 或从相册选择 —</div>
+    <button class="btn btn-secondary btn-full" onclick="document.getElementById('albumInput').click()">️ 从相册导入图片</button>
+    <input type="file" id="albumInput" accept="image/*" style="display:none" onchange="onImageSelected(event)">
     <img id="imagePreview">
 
-    <div style="margin-top:16px">
-      <div class="setting-group-title" style="padding:0 0 8px 0">API 配置</div>
-      <input class="api-key-input" id="apiKeyInput" type="password" placeholder="输入图片识别API Key (OpenAI / 通义千问等)">
-      <div style="margin-top:8px">
-        <select class="setting-select" id="apiProvider">
-          <option value="openai">OpenAI GPT-4o</option>
-          <option value="qwen">通义千问 VL</option>
-          <option value="gemini">Google Gemini</option>
-        </select>
-      </div>
-    </div>
+    <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="analyzeImage()">🔍 识别食物</button>
 
     <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="analyzeImage()">🔍 识别食物</button>
 
@@ -525,7 +518,7 @@ body {
     <div class="setting-item">
       <div><div class="si-label">API 提供商</div><div class="si-sub">文字解析和图片识别共用</div></div>
       <select class="setting-select" id="setApiProvider" onchange="saveApiSettings()">
-        <option value="qwen">千问3.8 Max (推荐)</option>
+        <option value="qwen">千问3.8 VL Max (推荐)</option>
         <option value="openai">OpenAI GPT-4o</option>
         <option value="gemini">Google Gemini</option>
       </select>
@@ -1172,7 +1165,7 @@ async function callQwenText(text, apiKey) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
     body: JSON.stringify({
-      model: 'qwen-plus',
+      model: 'qwen-vl-max',
       messages: [{
         role: 'user',
         content: `请分析以下饮食描述，提取每种食物的名称、克数、碳水(g)、蛋白质(g)、脂肪(g)，严格按JSON格式返回（不要返回其他内容）：
@@ -1283,16 +1276,12 @@ function onImageSelected(event) {
 }
 
 async function analyzeImage() {
-  const apiKey = document.getElementById('apiKeyInput').value.trim() || state.settings.apiKey;
-  const provider = document.getElementById('apiProvider').value;
+  const apiKey = state.settings.apiKey || '';
+  const provider = state.settings.apiProvider || 'qwen';
   const preview = document.getElementById('imagePreview');
 
-  if (!apiKey) { toast('请先输入API Key'); return; }
+  if (!apiKey) { toast('请先在设置页配置API Key'); return; }
   if (!preview.src || preview.style.display === 'none') { toast('请先选择图片'); return; }
-
-  state.settings.apiKey = apiKey;
-  state.settings.apiProvider = provider;
-  saveState();
 
   toast('正在识别食物...');
 
@@ -1338,7 +1327,7 @@ async function callOpenAI(base64, apiKey) {
       messages: [{
         role: 'user',
         content: [
-          { type: 'text', text: '请识别图片中的所有食物，对每种食物估算克数，并严格按以下JSON格式返回（不要返回其他内容）：\n[{\"name\":\"食物名\",\"weight\":克数}, ...]\n食物名用中文。只返回JSON数组。' },
+          { type: 'text', text: '请识别图片中的所有食物，对每种食物估算克数、碳水(g)、蛋白质(g)、脂肪(g)，并严格按以下JSON格式返回（不要返回其他内容）：\n[{\"name\":\"食物名\",\"weight\":克数,\"carb\":碳水克数,\"protein\":蛋白质克数,\"fat\":脂肪克数}, ...]\n食物名用中文。只返回JSON数组。' },
           { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
         ]
       }],
@@ -1359,7 +1348,7 @@ async function callQwen(base64, apiKey) {
       messages: [{
         role: 'user',
         content: [
-          { type: 'text', text: '请识别图片中的所有食物，对每种食物估算克数，并严格按以下JSON格式返回（不要返回其他内容）：\n[{\"name\":\"食物名\",\"weight\":克数}, ...]\n食物名用中文。只返回JSON数组。' },
+          { type: 'text', text: '请识别图片中的所有食物，对每种食物估算克数、碳水(g)、蛋白质(g)、脂肪(g)，并严格按以下JSON格式返回（不要返回其他内容）：\n[{\"name\":\"食物名\",\"weight\":克数,\"carb\":碳水克数,\"protein\":蛋白质克数,\"fat\":脂肪克数}, ...]\n食物名用中文。只返回JSON数组。' },
           { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
         ]
       }],
@@ -1377,7 +1366,7 @@ async function callGemini(base64, apiKey) {
     body: JSON.stringify({
       contents: [{
         parts: [
-          { text: '请识别图片中的所有食物，对每种食物估算克数，并严格按以下JSON格式返回（不要返回其他内容）：\n[{"name":"食物名","weight":克数}, ...]\n食物名用中文。只返回JSON数组。' },
+          { text: '请识别图片中的所有食物，对每种食物估算克数、碳水(g)、蛋白质(g)、脂肪(g)，并严格按以下JSON格式返回（不要返回其他内容）：\n[{"name":"食物名","weight":克数,"carb":碳水克数,"protein":蛋白质克数,"fat":脂肪克数}, ...]\n食物名用中文。只返回JSON数组。' },
           { inline_data: { mime_type: 'image/jpeg', data: base64 } }
         ]
       }]
@@ -1560,8 +1549,6 @@ function toast(msg) {
 (function init() {
   loadState();
   document.documentElement.setAttribute('data-theme', state.settings.theme);
-  document.getElementById('apiKeyInput').value = state.settings.apiKey || '';
-  document.getElementById('apiProvider').value = state.settings.apiProvider || 'openai';
   renderQuickFoods();
   recalcGoals();
   refreshDashboard();
