@@ -188,6 +188,26 @@ body {
 .ocr-result .ocr-title { font-weight: 600; font-size: 15px; margin-bottom: 8px; }
 .ocr-result .ocr-text { font-size: 13px; color: var(--text2); line-height: 1.6; }
 
+/* AI parse result card */
+.ai-result-card {
+  background: var(--card); border-radius: 14px; padding: 16px;
+  box-shadow: var(--shadow);
+}
+.ai-result-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+.ai-result-header .ai-result-title { font-weight: 700; font-size: 15px; }
+.ai-result-header .ai-result-total { font-size: 14px; color: var(--cal); font-weight: 700; }
+.ai-food-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+.ai-food-item:last-child { border-bottom: none; }
+.ai-fi-name { font-size: 14px; font-weight: 500; }
+.ai-fi-weight { font-size: 12px; color: var(--text2); margin: 0 8px; }
+.ai-fi-macros { font-size: 11px; color: var(--text2); }
+
 /* ===== History ===== */
 .date-nav {
   display: flex; align-items: center; justify-content: space-between;
@@ -353,6 +373,16 @@ body {
 
   <!-- Text Input Tab -->
   <div id="logTabText">
+    <!-- AI 文字解析 -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px">🤖 AI 文字解析</div>
+      <textarea id="aiFoodInput" class="food-input" style="width:100%;min-height:80px;resize:vertical;font-size:14px" placeholder="描述你吃了什么，例如：鲜肉小笼包8个共272克"></textarea>
+      <button class="btn btn-primary btn-full" style="margin-top:10px" id="aiParseBtn" onclick="aiParseFood()">🤖 AI 智能解析</button>
+    </div>
+
+    <!-- AI 解析结果 -->
+    <div id="aiParseResult" style="display:none;margin-bottom:16px"></div>
+
     <div class="input-area">
       <div class="input-row">
         <input class="food-input" id="foodSearchInput" type="text" placeholder="搜索食物名称..." oninput="onFoodSearch()" autocomplete="off">
@@ -1049,6 +1079,178 @@ function removeItem(mealIdx, itemIdx) {
   dayData.meals[mealIdx].splice(itemIdx, 1);
   saveState();
   refreshDashboard();
+}
+
+// =====================================================
+// AI TEXT PARSING
+// =====================================================
+let aiParsedFoods = [];
+
+async function aiParseFood() {
+  const input = document.getElementById('aiFoodInput').value.trim();
+  if (!input) { toast('请输入食物描述'); return; }
+
+  const btn = document.getElementById('aiParseBtn');
+  btn.textContent = '解析中...';
+  btn.disabled = true;
+  document.getElementById('aiParseResult').style.display = 'none';
+  document.getElementById('aiParseResult').innerHTML = '';
+
+  try {
+    const apiKey = state.settings.apiKey || '';
+    if (!apiKey) { toast('请先在设置页配置API Key'); return; }
+
+    const provider = state.settings.apiProvider || 'qwen';
+    let result;
+    if (provider === 'openai') {
+      result = await callOpenAIText(input, apiKey);
+    } else if (provider === 'qwen') {
+      result = await callQwenText(input, apiKey);
+    } else if (provider === 'gemini') {
+      result = await callGeminiText(input, apiKey);
+    }
+
+    if (result) {
+      aiParsedFoods = parseAIResponse(result);
+      if (aiParsedFoods.length === 0) {
+        document.getElementById('aiParseResult').style.display = 'block';
+        document.getElementById('aiParseResult').innerHTML = '<div style="text-align:center;padding:16px;color:var(--text2)">未能解析出食物，请换个描述试试</div>';
+        return;
+      }
+      renderAIParseResult();
+    }
+  } catch(e) {
+    console.error(e);
+    document.getElementById('aiParseResult').style.display = 'block';
+    document.getElementById('aiParseResult').innerHTML = `<div style="text-align:center;padding:16px;color:var(--danger)">解析失败：${e.message}</div>`;
+  } finally {
+    btn.textContent = '🤖 AI 智能解析';
+    btn.disabled = false;
+  }
+}
+
+async function callOpenAIText(text, apiKey) {
+  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      messages: [{
+        role: 'user',
+        content: `请分析以下饮食描述，提取每种食物的名称、克数、碳水(g)、蛋白质(g)、脂肪(g)，严格按JSON格式返回（不要返回其他内容）：
+[{"name":"食物名","weight":克数,"carb":碳水克数,"protein":蛋白质克数,"fat":脂肪克数}, ...]
+只返回JSON数组。描述：${text}`
+      }],
+      max_tokens: 1024,
+      temperature: 0.2,
+    })
+  });
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+async function callQwenText(text, apiKey) {
+  const resp = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: 'qwen-plus',
+      messages: [{
+        role: 'user',
+        content: `请分析以下饮食描述，提取每种食物的名称、克数、碳水(g)、蛋白质(g)、脂肪(g)，严格按JSON格式返回（不要返回其他内容）：
+[{"name":"食物名","weight":克数,"carb":碳水克数,"protein":蛋白质克数,"fat":脂肪克数}, ...]
+只返回JSON数组。描述：${text}`
+      }],
+      max_tokens: 1024,
+    })
+  });
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+async function callGeminiText(text, apiKey) {
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{ text: `请分析以下饮食描述，提取每种食物的名称、克数、碳水(g)、蛋白质(g)、脂肪(g)，严格按JSON格式返回（不要返回其他内容）：
+[{"name":"食物名","weight":克数,"carb":碳水克数,"protein":蛋白质克数,"fat":脂肪克数}, ...]
+只返回JSON数组。描述：${text}` }]
+      }]
+    })
+  });
+  const data = await resp.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+function parseAIResponse(text) {
+  try {
+    const match = text.match(/\[[\s\S]*?\]/);
+    if (match) {
+      const arr = JSON.parse(match[0]);
+      return arr.map(item => {
+        const w = parseFloat(item.weight) || 100;
+        const carb = parseFloat(item.carb) || 0;
+        const protein = parseFloat(item.protein) || 0;
+        const fat = parseFloat(item.fat) || 0;
+        const food = findClosestFood(item.name);
+        if (food && (!item.carb && !item.protein && !item.fat)) {
+          // Use DB values if AI didn't return macros
+          return {
+            name: food.name, weight: w,
+            carb: Math.round(food.carb * w / 100 * 10) / 10,
+            protein: Math.round(food.protein * w / 100 * 10) / 10,
+            fat: Math.round(food.fat * w / 100 * 10) / 10,
+            cal: calcCal(food.carb * w / 100, food.protein * w / 100, food.fat * w / 100),
+          };
+        }
+        return {
+          name: item.name || '未知食物', weight: w,
+          carb: Math.round(carb * 10) / 10,
+          protein: Math.round(protein * 10) / 10,
+          fat: Math.round(fat * 10) / 10,
+          cal: calcCal(carb, protein, fat),
+        };
+      });
+    }
+  } catch(e) { console.error('parseAIResponse error:', e); }
+  return [];
+}
+
+function renderAIParseResult() {
+  const container = document.getElementById('aiParseResult');
+  let totalCal = 0, totalCarb = 0, totalProt = 0, totalFat = 0;
+  aiParsedFoods.forEach(f => { totalCal += f.cal; totalCarb += f.carb; totalProt += f.protein; totalFat += f.fat; });
+
+  let html = `<div class="ai-result-card">
+    <div class="ai-result-header">
+      <span class="ai-result-title">✅ 解析结果</span>
+      <span class="ai-result-total">${Math.round(totalCal)} kcal</span>
+    </div>`;
+  aiParsedFoods.forEach(f => {
+    html += `<div class="ai-food-item">
+      <span class="ai-fi-name">${f.name}</span>
+      <span class="ai-fi-weight">${f.weight}g</span>
+      <span class="ai-fi-macros">碳${f.carb}g 蛋${f.protein}g 脂${f.fat}g ≈ ${Math.round(f.cal)}kcal</span>
+    </div>`;
+  });
+  html += `<button class="btn btn-success btn-full" style="margin-top:12px" onclick="addAIFoods()">✓ 添加到记录</button>
+  </div>`;
+  container.innerHTML = html;
+  container.style.display = 'block';
+}
+
+function addAIFoods() {
+  if (aiParsedFoods.length === 0) { toast('没有可添加的食物'); return; }
+  showMealPicker(() => {
+    aiParsedFoods.forEach(f => addItemToMeal(getSelectedMeal(), f));
+    aiParsedFoods = [];
+    document.getElementById('aiParseResult').style.display = 'none';
+    document.getElementById('aiFoodInput').value = '';
+    toast(`已添加 ${aiParsedFoods.length} 种食物`);
+    refreshDashboard();
+  });
 }
 
 // =====================================================
