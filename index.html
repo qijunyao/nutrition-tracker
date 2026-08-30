@@ -1254,12 +1254,13 @@ function renderAIParseResult() {
 
 function addAIFoods() {
   if (aiParsedFoods.length === 0) { toast('没有可添加的食物'); return; }
+  const count = aiParsedFoods.length;
   showMealPicker(() => {
     aiParsedFoods.forEach(f => addItemToMeal(getSelectedMeal(), f));
     aiParsedFoods = [];
     document.getElementById('aiParseResult').style.display = 'none';
     document.getElementById('aiFoodInput').value = '';
-    toast(`已添加 ${aiParsedFoods.length} 种食物`);
+    toast(`已添加 ${count} 种食物`);
     refreshDashboard();
   });
 }
@@ -1378,27 +1379,39 @@ async function callGemini(base64, apiKey) {
 
 function parseOCRResult(text) {
   try {
-    // Try to extract JSON from response
     const match = text.match(/\[[\s\S]*?\]/);
     if (match) {
       const arr = JSON.parse(match[0]);
       return arr.map(item => {
+        const w = parseFloat(item.weight) || 100;
+        // AI 返回了宏量营养素就直接用
+        const aiCarb = parseFloat(item.carb);
+        const aiProt = parseFloat(item.protein);
+        const aiFat = parseFloat(item.fat);
+        if (!isNaN(aiCarb) && !isNaN(aiProt) && !isNaN(aiFat)) {
+          return {
+            name: item.name || '未知食物', weight: w,
+            carb: Math.round(aiCarb * 10) / 10,
+            protein: Math.round(aiProt * 10) / 10,
+            fat: Math.round(aiFat * 10) / 10,
+            cal: calcCal(aiCarb, aiProt, aiFat),
+          };
+        }
+        // AI 没返回宏量营养素，查数据库
         const food = findClosestFood(item.name);
         if (food) {
-          const w = item.weight || 100;
           return {
-            name: food.name,
-            weight: w,
+            name: food.name, weight: w,
             carb: Math.round(food.carb * w / 100 * 10) / 10,
             protein: Math.round(food.protein * w / 100 * 10) / 10,
             fat: Math.round(food.fat * w / 100 * 10) / 10,
             cal: calcCal(food.carb * w / 100, food.protein * w / 100, food.fat * w / 100),
           };
         }
-        return { name: item.name, weight: item.weight || 100, carb: 0, protein: 0, fat: 0, cal: 0 };
+        return { name: item.name || '未知食物', weight: w, carb: 0, protein: 0, fat: 0, cal: 0 };
       });
     }
-  } catch(e) {}
+  } catch(e) { console.error('parseOCRResult error:', e); }
   return [];
 }
 
