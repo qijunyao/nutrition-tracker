@@ -521,6 +521,22 @@ body {
   </div>
 
   <div class="setting-group">
+    <div class="setting-group-title">AI 功能配置</div>
+    <div class="setting-item">
+      <div><div class="si-label">API 提供商</div><div class="si-sub">文字解析和图片识别共用</div></div>
+      <select class="setting-select" id="setApiProvider" onchange="saveApiSettings()">
+        <option value="qwen">千问3.8 Max (推荐)</option>
+        <option value="openai">OpenAI GPT-4o</option>
+        <option value="gemini">Google Gemini</option>
+      </select>
+    </div>
+    <div class="setting-item" style="flex-direction:column;align-items:stretch;gap:8px">
+      <div><div class="si-label">API Key</div><div class="si-sub">用于AI文字解析和拍照识别</div></div>
+      <input class="api-key-input" id="setApiKey" type="password" placeholder="输入你的 API Key" oninput="saveApiSettings()" style="margin:0;width:100%">
+    </div>
+  </div>
+
+  <div class="setting-group">
     <div class="setting-group-title">数据管理</div>
     <div class="setting-item" onclick="exportData()" style="cursor:pointer">
       <div class="si-label">导出今日数据 (JSON)</div>
@@ -949,6 +965,8 @@ function switchPage(pageId) {
     document.getElementById('setExercise').value = state.settings.exercise;
     document.getElementById('setMode').value = state.settings.mode;
     document.getElementById('setSprintDay').value = state.settings.sprintDay;
+    document.getElementById('setApiProvider').value = state.settings.apiProvider || 'qwen';
+    document.getElementById('setApiKey').value = state.settings.apiKey || '';
     recalcGoals();
   }
   if (pageId === 'pageHistory') renderHistory();
@@ -1518,6 +1536,12 @@ function clearTodayData() {
     refreshDashboard();
     toast('已清除今日数据');
   }
+}
+
+function saveApiSettings() {
+  state.settings.apiKey = document.getElementById('setApiKey').value.trim();
+  state.settings.apiProvider = document.getElementById('setApiProvider').value;
+  saveState();
 }
 
 // =====================================================
