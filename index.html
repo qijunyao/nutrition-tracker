@@ -1015,6 +1015,7 @@ function onFoodSelected(name) {
 
   // Show weight modal
   showMealPicker(() => {
+    const mealName = MEAL_NAMES[getSelectedMeal()];
     const weight = parseFloat(prompt(`"${name}" 的克数：`, '100'));
     if (!weight || weight <= 0) return;
     addItemToMeal(getSelectedMeal(), {
@@ -1027,7 +1028,8 @@ function onFoodSelected(name) {
     });
     document.getElementById('foodSearchInput').value = '';
     document.getElementById('searchResults').style.display = 'none';
-    toast(`已添加 ${name} ${weight}g`);
+    refreshDashboard();
+    showSuccessModal(`已添加到「${mealName}」`, `${name} ${weight}g`);
   });
 }
 
@@ -1060,13 +1062,15 @@ function addManualEntry() {
   const totalFat = fat * weight / 100;
 
   showMealPicker(() => {
+    const mealName = MEAL_NAMES[getSelectedMeal()];
     addItemToMeal(getSelectedMeal(), {
       name, weight,
       carb: totalCarb, protein: totalProt, fat: totalFat,
       cal: calcCal(totalCarb, totalProt, totalFat),
     });
     ['manualName','manualWeight','manualCarb','manualProt','manualFat'].forEach(id => document.getElementById(id).value = '');
-    toast(`已添加 ${name} ${weight}g`);
+    refreshDashboard();
+    showSuccessModal(`已添加到「${mealName}」`, `${name} ${weight}g`);
   });
 }
 
