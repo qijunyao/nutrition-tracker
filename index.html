@@ -562,10 +562,20 @@ body {
 <div class="toast" id="toast"></div>
 
 <!-- Modal: Meal Picker -->
-<div class="modal-overlay" id="mealModal">
-  <div class="modal">
+<div class="modal-overlay" id="mealModal" onclick="document.getElementById('mealModal').classList.remove('show')">
+  <div class="modal" catchtap>
     <div class="modal-title">选择餐次</div>
     <div id="mealPickerOptions"></div>
+  </div>
+</div>
+
+<!-- Modal: Add Success -->
+<div class="modal-overlay" id="successModal" onclick="closeSuccessModal()">
+  <div class="modal" style="text-align:center" catchtap>
+    <div style="font-size:48px;margin-bottom:12px">✅</div>
+    <div class="modal-title" id="successTitle" style="margin-bottom:8px">添加成功</div>
+    <div id="successDetail" style="color:var(--text2);font-size:14px;margin-bottom:16px"></div>
+    <button class="btn btn-primary btn-full" onclick="event.stopPropagation();closeSuccessModal()">好的</button>
   </div>
 </div>
 
@@ -695,6 +705,17 @@ const FOOD_DB = [
   { name: "汉堡(普通)", carb: 35.0, protein: 16.0, fat: 18.0, cat: "快餐" },
   { name: "披萨(一片)", carb: 33.0, protein: 12.0, fat: 14.0, cat: "快餐" },
   { name: "泡面(一袋)", carb: 55.0, protein: 9.0, fat: 20.0, cat: "快餐" },
+  { name: "酸辣粉", carb: 18.0, protein: 4.0, fat: 8.0, cat: "快餐" },
+  { name: "炸酥肉", carb: 12.0, protein: 18.0, fat: 22.0, cat: "快餐" },
+  { name: "油炸腐竹", carb: 8.0, protein: 20.0, fat: 25.0, cat: "快餐" },
+  { name: "螺蛳粉", carb: 22.0, protein: 6.0, fat: 10.0, cat: "快餐" },
+  { name: "米饭", carb: 25.9, protein: 2.6, fat: 0.3, cat: "快餐" },
+  { name: "米饭(一碗)", carb: 25.9, protein: 2.6, fat: 0.3, cat: "快餐" },
+  { name: "炒粉", carb: 28.0, protein: 5.0, fat: 10.0, cat: "快餐" },
+  { name: "炒面", carb: 30.0, protein: 6.0, fat: 12.0, cat: "快餐" },
+  { name: "凉皮", carb: 25.0, protein: 4.0, fat: 6.0, cat: "快餐" },
+  { name: "肉夹馍", carb: 30.0, protein: 12.0, fat: 14.0, cat: "快餐" },
+  { name: "烤串", carb: 5.0, protein: 20.0, fat: 15.0, cat: "快餐" },
 
   // 饮品/零食
   { name: "可口可乐", carb: 10.6, protein: 0, fat: 0, cat: "饮品" },
@@ -1250,19 +1271,6 @@ function renderAIParseResult() {
   container.style.display = 'block';
 }
 
-function addAIFoods() {
-  if (aiParsedFoods.length === 0) { toast('没有可添加的食物'); return; }
-  const count = aiParsedFoods.length;
-  showMealPicker(() => {
-    aiParsedFoods.forEach(f => addItemToMeal(getSelectedMeal(), f));
-    aiParsedFoods = [];
-    document.getElementById('aiParseResult').style.display = 'none';
-    document.getElementById('aiFoodInput').value = '';
-    toast(`已添加 ${count} 种食物`);
-    refreshDashboard();
-  });
-}
-
 // =====================================================
 // IMAGE RECOGNITION
 // =====================================================
@@ -1441,13 +1449,40 @@ function formatOCRResult(foods) {
 function addOcrFoods() {
   if (ocrParsedFoods.length === 0) { toast('没有可添加的食物'); return; }
   showMealPicker(() => {
+    const mealName = MEAL_NAMES[getSelectedMeal()];
+    const count = ocrParsedFoods.length;
     ocrParsedFoods.forEach(f => addItemToMeal(getSelectedMeal(), f));
     ocrParsedFoods = [];
     document.getElementById('ocrResult').style.display = 'none';
     document.getElementById('imagePreview').style.display = 'none';
-    toast(`已添加食物，请查看今日记录`);
     refreshDashboard();
+    showSuccessModal(`已添加到「${mealName}」`, `${count} 种食物`);
   });
+}
+
+function addAIFoods() {
+  if (aiParsedFoods.length === 0) { toast('没有可添加的食物'); return; }
+  const count = aiParsedFoods.length;
+  showMealPicker(() => {
+    const mealName = MEAL_NAMES[getSelectedMeal()];
+    aiParsedFoods.forEach(f => addItemToMeal(getSelectedMeal(), f));
+    aiParsedFoods = [];
+    document.getElementById('aiParseResult').style.display = 'none';
+    document.getElementById('aiFoodInput').value = '';
+    refreshDashboard();
+    showSuccessModal(`已添加到「${mealName}」`, `${count} 种食物`);
+  });
+}
+
+function showSuccessModal(title, detail) {
+  document.getElementById('successTitle').textContent = title;
+  document.getElementById('successDetail').textContent = detail;
+  document.getElementById('successModal').classList.add('show');
+}
+
+function closeSuccessModal() {
+  document.getElementById('successModal').classList.remove('show');
+  switchPage('pageDashboard');
 }
 
 // =====================================================
