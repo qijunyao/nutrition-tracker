@@ -1070,28 +1070,25 @@ function showMealPicker(foods, source) {
   _pendingFoodsSource = source;
   const modal = document.getElementById('mealModal');
   const options = document.getElementById('mealPickerOptions');
-  options.innerHTML = MEAL_NAMES.map((name, i) => `
-    <div class="search-item meal-option-btn" data-idx="${i}">
-      <div class="si-name">${name}</div>
-      <span class="si-add">✓</span>
-    </div>
-  `).join('');
+  options.innerHTML = '';
+  MEAL_NAMES.forEach((name, i) => {
+    const div = document.createElement('div');
+    div.className = 'search-item';
+    div.style.cursor = 'pointer';
+    div.innerHTML = `<div class="si-name">${name}</div><span class="si-add">✓</span>`;
+    div.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      confirmAddMeal(i);
+    });
+    options.appendChild(div);
+  });
   modal.classList.add('show');
 }
 
-// 事件委托：在 options 容器上统一监听点击
-document.addEventListener('click', function(e) {
-  const btn = e.target.closest('.meal-option-btn');
-  if (btn) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
-    const idx = parseInt(btn.dataset.idx);
-    confirmAddMeal(idx);
-  }
-}, true); // 用 capture 阶段，确保先于 overlay 的 click 执行
-
 function confirmAddMeal(idx) {
+  alert('confirmAddMeal called, idx=' + idx + ', foods=' + (_pendingFoods ? _pendingFoods.length : 0));
   const mealName = MEAL_NAMES[idx];
   const foods = _pendingFoods;
   const count = foods.length;
