@@ -783,6 +783,15 @@ function loadState() {
       state.days = parsed.days || {};
     }
   } catch(e) {}
+  // 兼容旧数据：meals 里如果有 {} 对象，修正为 [] 数组
+  Object.keys(state.days).forEach(function(key) {
+    var d = state.days[key];
+    if (d && d.meals) {
+      for (var i = 0; i < 4; i++) {
+        if (!Array.isArray(d.meals[i])) d.meals[i] = [];
+      }
+    }
+  });
 }
 
 function saveState() {
@@ -790,7 +799,7 @@ function saveState() {
 }
 
 function getDayData(key) {
-  if (!state.days[key]) state.days[key] = { meals: [{},{},{},{}] };
+  if (!state.days[key]) state.days[key] = { meals: [[],[],[],[]] };
   return state.days[key];
 }
 
@@ -1093,16 +1102,19 @@ function confirmAddMeal(idx) {
     const foods = _pendingFoods;
     const count = foods.length;
 
-    // 添加数据
+    // 添加数据（确保 meals[idx] 是数组）
     const dayData = getDayData(state.today);
-    if (!dayData.meals[idx]) dayData.meals[idx] = [];
+    if (!Array.isArray(dayData.meals)) dayData.meals = [[],[],[],[]];
+    if (!Array.isArray(dayData.meals[idx])) dayData.meals[idx] = [];
     foods.forEach(function(f) { dayData.meals[idx].push(f); });
     saveState();
 
     // 关闭弹窗
     document.getElementById('mealModal').classList.remove('show');
 
-    // 提示
+    // 刷新并跳转
+    refreshDashboard();
+    switchPage('pageDashboard');
     toast('✅ 已添加到' + mealName + ' (' + count + '种)');
   } catch(e) {
     document.getElementById('mealModal').classList.remove('show');
@@ -1561,7 +1573,7 @@ function exportData() {
 
 function clearTodayData() {
   if (confirm('确定清除今日所有记录？')) {
-    state.days[state.today] = { meals: [{},{},{},{}] };
+    state.days[state.today] = { meals: [[],[],[],[]] };
     saveState();
     refreshDashboard();
     toast('已清除今日数据');
