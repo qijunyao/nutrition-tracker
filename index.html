@@ -437,8 +437,6 @@ body {
 
     <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="analyzeImage()">🔍 识别食物</button>
 
-    <button class="btn btn-primary btn-full" style="margin-top:16px" onclick="analyzeImage()">🔍 识别食物</button>
-
     <div class="ocr-result" id="ocrResult">
       <div class="ocr-title">识别结果</div>
       <div class="ocr-text" id="ocrText"></div>
@@ -1268,43 +1266,42 @@ function addAIFoods() {
 // =====================================================
 // IMAGE RECOGNITION
 // =====================================================
+let _selectedImageBase64 = '';
+let _selectedImageMimeType = '';
+
 function onImageSelected(event) {
   const file = event.target.files[0];
   if (!file) return;
   const preview = document.getElementById('imagePreview');
   preview.src = URL.createObjectURL(file);
   preview.style.display = 'block';
+  // 用 FileReader 直接读 base64，避免 canvas 跨域问题
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const dataUrl = e.target.result;
+    _selectedImageBase64 = dataUrl.split(',')[1];
+    _selectedImageMimeType = file.type || 'image/jpeg';
+  };
+  reader.readAsDataURL(file);
 }
 
 async function analyzeImage() {
   const apiKey = state.settings.apiKey || '';
   const provider = state.settings.apiProvider || 'qwen';
-  const preview = document.getElementById('imagePreview');
 
   if (!apiKey) { toast('请先在设置页配置API Key'); return; }
-  if (!preview.src || preview.style.display === 'none') { toast('请先选择图片'); return; }
+  if (!_selectedImageBase64) { toast('请先选择图片'); return; }
 
   toast('正在识别食物...');
 
   try {
-    // Convert image to base64
-    const canvas = document.createElement('canvas');
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.src = preview.src;
-    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
-    canvas.width = img.width;
-    canvas.height = img.height;
-    canvas.getContext('2d').drawImage(img, 0, 0);
-    const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-
     let result;
     if (provider === 'openai') {
-      result = await callOpenAI(base64, apiKey);
+      result = await callOpenAI(_selectedImageBase64, _selectedImageMimeType, apiKey);
     } else if (provider === 'qwen') {
-      result = await callQwen(base64, apiKey);
+      result = await callQwen(_selectedImageBase64, _selectedImageMimeType, apiKey);
     } else if (provider === 'gemini') {
-      result = await callGemini(base64, apiKey);
+      result = await callGemini(_selectedImageBase64, _selectedImageMimeType, apiKey);
     }
 
     if (result) {
@@ -1319,7 +1316,7 @@ async function analyzeImage() {
   }
 }
 
-async function callOpenAI(base64, apiKey) {
+async function callOpenAI(base64, mimeType, apiKey) {
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
@@ -1329,7 +1326,7 @@ async function callOpenAI(base64, apiKey) {
         role: 'user',
         content: [
           { type: 'text', text: '请识别图片中的所有食物，对每种食物估算克数、碳水(g)、蛋白质(g)、脂肪(g)，并严格按以下JSON格式返回（不要返回其他内容）：\n[{\"name\":\"食物名\",\"weight\":克数,\"carb\":碳水克数,\"protein\":蛋白质克数,\"fat\":脂肪克数}, ...]\n食物名用中文。只返回JSON数组。' },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } }
         ]
       }],
       max_tokens: 1024,
@@ -1340,7 +1337,7 @@ async function callOpenAI(base64, apiKey) {
   return data.choices?.[0]?.message?.content || '';
 }
 
-async function callQwen(base64, apiKey) {
+async function callQwen(base64, mimeType, apiKey) {
   const resp = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
@@ -1350,7 +1347,7 @@ async function callQwen(base64, apiKey) {
         role: 'user',
         content: [
           { type: 'text', text: '请识别图片中的所有食物，对每种食物估算克数、碳水(g)、蛋白质(g)、脂肪(g)，并严格按以下JSON格式返回（不要返回其他内容）：\n[{\"name\":\"食物名\",\"weight\":克数,\"carb\":碳水克数,\"protein\":蛋白质克数,\"fat\":脂肪克数}, ...]\n食物名用中文。只返回JSON数组。' },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } }
         ]
       }],
       max_tokens: 1024,
@@ -1360,7 +1357,7 @@ async function callQwen(base64, apiKey) {
   return data.choices?.[0]?.message?.content || '';
 }
 
-async function callGemini(base64, apiKey) {
+async function callGemini(base64, mimeType, apiKey) {
   const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1368,7 +1365,7 @@ async function callGemini(base64, apiKey) {
       contents: [{
         parts: [
           { text: '请识别图片中的所有食物，对每种食物估算克数、碳水(g)、蛋白质(g)、脂肪(g)，并严格按以下JSON格式返回（不要返回其他内容）：\n[{"name":"食物名","weight":克数,"carb":碳水克数,"protein":蛋白质克数,"fat":脂肪克数}, ...]\n食物名用中文。只返回JSON数组。' },
-          { inline_data: { mime_type: 'image/jpeg', data: base64 } }
+          { inline_data: { mime_type: mimeType, data: base64 } }
         ]
       }]
     })
