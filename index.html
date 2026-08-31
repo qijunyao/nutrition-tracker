@@ -1013,24 +1013,17 @@ function onFoodSelected(name) {
   const food = FOOD_DB.find(f => f.name === name);
   if (!food) return;
 
-  // Show weight modal
-  showMealPicker(() => {
-    const mealName = MEAL_NAMES[getSelectedMeal()];
-    const weight = parseFloat(prompt(`"${name}" 的克数：`, '100'));
-    if (!weight || weight <= 0) return;
-    addItemToMeal(getSelectedMeal(), {
-      name,
-      weight,
-      carb: food.carb * weight / 100,
-      protein: food.protein * weight / 100,
-      fat: food.fat * weight / 100,
-      cal: calcCal(food.carb * weight / 100, food.protein * weight / 100, food.fat * weight / 100),
-    });
-    document.getElementById('foodSearchInput').value = '';
-    document.getElementById('searchResults').style.display = 'none';
-    refreshDashboard();
-    showSuccessModal(`已添加到「${mealName}」`, `${name} ${weight}g`);
-  });
+  const weight = parseFloat(prompt(`"${name}" 的克数：`, '100'));
+  if (!weight || weight <= 0) return;
+
+  showMealPicker([{
+    name,
+    weight,
+    carb: food.carb * weight / 100,
+    protein: food.protein * weight / 100,
+    fat: food.fat * weight / 100,
+    cal: calcCal(food.carb * weight / 100, food.protein * weight / 100, food.fat * weight / 100),
+  }], 'search');
 }
 
 // Quick add
@@ -1061,30 +1054,24 @@ function addManualEntry() {
   const totalProt = prot * weight / 100;
   const totalFat = fat * weight / 100;
 
-  showMealPicker(() => {
-    const mealName = MEAL_NAMES[getSelectedMeal()];
-    addItemToMeal(getSelectedMeal(), {
-      name, weight,
-      carb: totalCarb, protein: totalProt, fat: totalFat,
-      cal: calcCal(totalCarb, totalProt, totalFat),
-    });
-    ['manualName','manualWeight','manualCarb','manualProt','manualFat'].forEach(id => document.getElementById(id).value = '');
-    refreshDashboard();
-    showSuccessModal(`已添加到「${mealName}」`, `${name} ${weight}g`);
-  });
+  showMealPicker([{
+    name, weight,
+    carb: totalCarb, protein: totalProt, fat: totalFat,
+    cal: calcCal(totalCarb, totalProt, totalFat),
+  }], 'manual');
 }
 
 // Meal picker modal
-let _selectedMealIdx = 0;
-let _mealPickerCallback = null;
+let _pendingFoods = [];
+let _pendingFoodsSource = ''; // 'ocr' or 'ai' or 'manual' or 'search'
 
-function showMealPicker(callback) {
-  _mealPickerCallback = callback;
-  _selectedMealIdx = 0;
+function showMealPicker(foods, source) {
+  _pendingFoods = foods;
+  _pendingFoodsSource = source;
   const modal = document.getElementById('mealModal');
   const options = document.getElementById('mealPickerOptions');
   options.innerHTML = MEAL_NAMES.map((name, i) => `
-    <div class="search-item" onclick="selectMeal(${i})">
+    <div class="search-item" onclick="confirmAddMeal(${i})">
       <div class="si-name">${name}</div>
       <span class="si-add">✓</span>
     </div>
@@ -1092,13 +1079,39 @@ function showMealPicker(callback) {
   modal.classList.add('show');
 }
 
-function selectMeal(idx) {
-  _selectedMealIdx = idx;
-  document.getElementById('mealModal').classList.remove('show');
-  if (_mealPickerCallback) _mealPickerCallback();
-}
+function confirmAddMeal(idx) {
+  event.stopPropagation();
+  const mealName = MEAL_NAMES[idx];
+  const foods = _pendingFoods;
+  const count = foods.length;
 
-function getSelectedMeal() { return _selectedMealIdx; }
+  foods.forEach(f => {
+    const dayData = getDayData(state.today);
+    if (!dayData.meals[idx]) dayData.meals[idx] = [];
+    dayData.meals[idx].push(f);
+  });
+  saveState();
+
+  // 清理源数据
+  if (_pendingFoodsSource === 'ocr') {
+    ocrParsedFoods = [];
+    document.getElementById('ocrResult').style.display = 'none';
+    document.getElementById('imagePreview').style.display = 'none';
+  } else if (_pendingFoodsSource === 'ai') {
+    aiParsedFoods = [];
+    document.getElementById('aiParseResult').style.display = 'none';
+    document.getElementById('aiFoodInput').value = '';
+  } else if (_pendingFoodsSource === 'manual') {
+    ['manualName','manualWeight','manualCarb','manualProt','manualFat'].forEach(id => document.getElementById(id).value = '');
+  } else if (_pendingFoodsSource === 'search') {
+    document.getElementById('foodSearchInput').value = '';
+    document.getElementById('searchResults').style.display = 'none';
+  }
+
+  document.getElementById('mealModal').classList.remove('show');
+  refreshDashboard();
+  showSuccessModal(`已添加到「${mealName}」`, `${count} 种食物`);
+}
 
 function addItemToMeal(mealIdx, item) {
   const dayData = getDayData(state.today);
@@ -1452,30 +1465,12 @@ function formatOCRResult(foods) {
 
 function addOcrFoods() {
   if (ocrParsedFoods.length === 0) { toast('没有可添加的食物'); return; }
-  showMealPicker(() => {
-    const mealName = MEAL_NAMES[getSelectedMeal()];
-    const count = ocrParsedFoods.length;
-    ocrParsedFoods.forEach(f => addItemToMeal(getSelectedMeal(), f));
-    ocrParsedFoods = [];
-    document.getElementById('ocrResult').style.display = 'none';
-    document.getElementById('imagePreview').style.display = 'none';
-    refreshDashboard();
-    showSuccessModal(`已添加到「${mealName}」`, `${count} 种食物`);
-  });
+  showMealPicker(ocrParsedFoods, 'ocr');
 }
 
 function addAIFoods() {
   if (aiParsedFoods.length === 0) { toast('没有可添加的食物'); return; }
-  const count = aiParsedFoods.length;
-  showMealPicker(() => {
-    const mealName = MEAL_NAMES[getSelectedMeal()];
-    aiParsedFoods.forEach(f => addItemToMeal(getSelectedMeal(), f));
-    aiParsedFoods = [];
-    document.getElementById('aiParseResult').style.display = 'none';
-    document.getElementById('aiFoodInput').value = '';
-    refreshDashboard();
-    showSuccessModal(`已添加到「${mealName}」`, `${count} 种食物`);
-  });
+  showMealPicker(aiParsedFoods, 'ai');
 }
 
 function showSuccessModal(title, detail) {
