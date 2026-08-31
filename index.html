@@ -1088,37 +1088,26 @@ function showMealPicker(foods, source) {
 }
 
 function confirmAddMeal(idx) {
-  const mealName = MEAL_NAMES[idx];
-  const foods = _pendingFoods;
-  const count = foods.length;
+  try {
+    const mealName = MEAL_NAMES[idx];
+    const foods = _pendingFoods;
+    const count = foods.length;
 
-  foods.forEach(f => {
+    // 添加数据
     const dayData = getDayData(state.today);
     if (!dayData.meals[idx]) dayData.meals[idx] = [];
-    dayData.meals[idx].push(f);
-  });
-  saveState();
+    foods.forEach(function(f) { dayData.meals[idx].push(f); });
+    saveState();
 
-  // 清理源数据
-  if (_pendingFoodsSource === 'ocr') {
-    ocrParsedFoods = [];
-    document.getElementById('ocrResult').style.display = 'none';
-    document.getElementById('imagePreview').style.display = 'none';
-  } else if (_pendingFoodsSource === 'ai') {
-    aiParsedFoods = [];
-    document.getElementById('aiParseResult').style.display = 'none';
-    document.getElementById('aiFoodInput').value = '';
-  } else if (_pendingFoodsSource === 'manual') {
-    ['manualName','manualWeight','manualCarb','manualProt','manualFat'].forEach(id => document.getElementById(id).value = '');
-  } else if (_pendingFoodsSource === 'search') {
-    document.getElementById('foodSearchInput').value = '';
-    document.getElementById('searchResults').style.display = 'none';
+    // 关闭弹窗
+    document.getElementById('mealModal').classList.remove('show');
+
+    // 提示
+    toast('✅ 已添加到' + mealName + ' (' + count + '种)');
+  } catch(e) {
+    document.getElementById('mealModal').classList.remove('show');
+    toast('错误: ' + e.message);
   }
-
-  document.getElementById('mealModal').classList.remove('show');
-  refreshDashboard();
-  toast('✅ 已添加到「' + mealName + '」，共 ' + count + ' 种食物');
-  switchPage('pageDashboard');
 }
 
 function addItemToMeal(mealIdx, item) {
