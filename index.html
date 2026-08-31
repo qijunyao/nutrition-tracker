@@ -1088,7 +1088,6 @@ function showMealPicker(foods, source) {
 }
 
 function confirmAddMeal(idx) {
-  alert('confirmAddMeal called, idx=' + idx + ', foods=' + (_pendingFoods ? _pendingFoods.length : 0));
   const mealName = MEAL_NAMES[idx];
   const foods = _pendingFoods;
   const count = foods.length;
@@ -1118,7 +1117,8 @@ function confirmAddMeal(idx) {
 
   document.getElementById('mealModal').classList.remove('show');
   refreshDashboard();
-  showSuccessModal(`已添加到「${mealName}」`, `${count} 种食物`);
+  toast('✅ 已添加到「' + mealName + '」，共 ' + count + ' 种食物');
+  switchPage('pageDashboard');
 }
 
 function addItemToMeal(mealIdx, item) {
